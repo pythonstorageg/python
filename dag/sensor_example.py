@@ -19,7 +19,7 @@ def any_file_exists(bucket_name, prefix):
     lst = [obj["Key"] for obj in response.get("Contents", [])]
     return any(lst)
 
-def saving_files_xcom(bucket_name, prefix):
+def processing_files(bucket_name, prefix):
     response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
     file_list = [obj["Key"] for obj in response.get("Contents", [])]
     if len(file_list)>0:
@@ -43,13 +43,10 @@ with DAG('dag_sensor_testing', start_date=datetime(2025, 4, 23), schedule_interv
         op_kwargs={"bucket_name": bucket_name, "prefix": "solar"}
     )
 
-    saving_in_xcom = PythonOperator(
+    process_file = PythonOperator(
     task_id='get_file_list',
-    python_callable=saving_files_xcom,
+    python_callable=processing_files,
     op_kwargs={"bucket_name": "ml-flow-trails", "prefix": "solar"}
     )
 
-    wait_for_any_file >> saving_in_xcom
-
-
-
+    wait_for_any_file >> process_file
