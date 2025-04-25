@@ -6,6 +6,8 @@ table = pa.table({
     "city": ["NY", "LA", "Chicago"]
 })
 
+table_name = pa.read_table("parqut_path")  # reading parquet file
+
 new_col = pa.array(["Engineer", "Doctor", "Artist"])
 table = table.append_column("profession", new_col)   # Adding column
 
@@ -34,5 +36,7 @@ table = table.append_column("Modified age", modified_values)   # Modifying and a
 name_dict = {}
 for idx, i in enumerate(table.schema.names):
     name_dict[table.schema.names[idx]] = table[i].to_pylist() # Converting all columns as keys and values as values
+
+combined = pa.concat_tables([table, table2]) # Concate two tables
 
 print(name_dict)
