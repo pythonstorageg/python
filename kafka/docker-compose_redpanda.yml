@@ -1,0 +1,54 @@
+services:
+  kafka:
+    image: apache/kafka:latest
+    container_name: kafka-kraft
+    ports:
+      - "9092:9092"
+    environment:
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      
+      # Fixed size settings
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      
+      # Increase buffer sizes to handle larger messages
+      KAFKA_SOCKET_REQUEST_MAX_BYTES: "2147483647"       # Increased to 2GB
+      KAFKA_MESSAGE_MAX_BYTES: "1073741824"              # 1GB
+      KAFKA_REPLICA_FETCH_MAX_BYTES: "1073741824"        # 1GB
+      KAFKA_FETCH_MESSAGE_MAX_BYTES: "1073741824"        # 1GB
+      
+      # Network buffer settings
+      KAFKA_SOCKET_SEND_BUFFER_BYTES: "10485760"         # 10MB 
+      KAFKA_SOCKET_RECEIVE_BUFFER_BYTES: "10485760"      # 10MB
+      
+    volumes:
+      - kafka-kraft-data:/opt/kafka/data
+
+  redpanda-console:
+    image: redpandadata/console:latest
+    container_name: redpanda-console
+    depends_on:
+      - kafka
+    ports:
+      - "8181:8080"
+    environment:
+      KAFKA_BROKERS: "kafka:9092"
+      REDPANDA_CONSOLE_SERVER_LISTEN_PORT: 8080
+    restart: unless-stopped
+
+volumes:
+  kafka-kraft-data:
+
+networks:
+  default:
+    name: kafka-net
+    external: true
