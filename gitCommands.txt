@@ -1,0 +1,1 @@
+git push --set-upstream git@github.com:pythonstorageg/python.git <branch name>
