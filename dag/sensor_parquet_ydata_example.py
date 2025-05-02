@@ -73,8 +73,8 @@ def processing_files(bucket_name, prefix):
                 s3.put_object(Bucket=bucket_name, Key="/processed/parquet_files/"+(i.split("/")[-1]), Body=body)
                 s3.delete_object(Bucket=bucket_name, Key=i)
 
-with DAG('sensor_parquet_testing',start_date=datetime(2025, 4, 29),
-    schedule_interval='0 7 15 * *'  ) as dag:
+with DAG('sensor_parquet_testing',start_date=datetime(2025, 5, 1, 0, 0),
+    schedule_interval='40 8 * * *', catchup=True) as dag:
 
     wait_for_any_file = PythonSensor(
         task_id="wait_for_any_file",
@@ -92,3 +92,4 @@ with DAG('sensor_parquet_testing',start_date=datetime(2025, 4, 29),
     )
 
     wait_for_any_file >> process_file
+
