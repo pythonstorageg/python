@@ -39,30 +39,6 @@ def checking_date_minIO(bucket_name, prefix):
             return "file_exists"
     return "file_missing"
     
-def process_parquet_files(parquet_file_name,df):
-    MLFLOW_TRACKING_URI = config_setup['MLFLOW']['tracking_uri']
-    EXPERIMENT_NAME = config_setup['MLFLOW']['experiment_name']
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    mlflow.set_experiment(EXPERIMENT_NAME)
-    # file_name = os.path.basename(parquet_file_name)
-    with mlflow.start_run(run_name=f"process_{parquet_file_name}"):
-        try:
-            # df = file_data.to_pandas()
-            mlflow.log_param("num_rows", len(df))
-            mlflow.log_param("num_columns", len(df.columns))
-            html_files = []
-            html_path = f"/tmp/generated_file.html"
-            profile = ProfileReport(df, title="EDA Report", explorative=True)
-            profile.to_file(html_path)
-            html_files.append(html_path)
-            mlflow.log_artifact(html_path, "visualizations")
-            for html_file in html_files:
-                if os.path.exists(html_file):
-                    os.remove(html_file)
-        except Exception as e:
-            print(f"Error processing {parquet_file_name}: {str(e)}")
-            mlflow.log_param("error", str(e))
-
 def processing_files(bucket_name,prefix):
     url = "https://pdscloud.ncmrwf.gov.in:8443/api/v1/REdownload"
     api_key = 'S447KGpOXCJkBTwCiDB6N0bryryGRBij'
@@ -70,7 +46,6 @@ def processing_files(bucket_name,prefix):
             {'url': url, 'variable': "GreenkoWindEnergy"},
             {'url': url, 'variable': "wind_solar_ind"},  
         ]
-
     username = 'greenko'
     password = 'GreenKo@ncmr9#'
     yesterday = (datetime.now(ist) - timedelta(1)).strftime('%Y%m%d')
@@ -103,31 +78,50 @@ def processing_files(bucket_name,prefix):
                 response = session.post(file['url'], headers=headers, stream=True)
             except Exception as e:
                 continue
-            if 'Content-Disposition' in response.headers:
-                cd = response.headers['Content-Disposition']
-                if 'filename=' in cd:
-                    filename = cd.split('filename=')[1].strip('"')
-                else:
-                    filename = file['variable'] 
-            else:
-                filename = file['variable'] 
+            # if 'Content-Disposition' in response.headers:
+            #     cd = response.headers['Content-Disposition']
+            #     if 'filename=' in cd:
+            #         filename = cd.split('filename=')[1].strip('"')
+            #     else:
+            #         filename = file['variable'] 
+            # else:
+            #     filename = file['variable'] 
             if response.status_code == 200:
-                archive_bytes = io.BytesIO(response.content)
-                archive_bytes.seek(0)  # Reset stream
-                with tarfile.open(fileobj=archive_bytes, mode='r:gz') as tar:
-                    for member in tar.getmembers():
-                        if member.isfile():
-                            extracted_file = tar.extractfile(member)
-                            file_data = extracted_file.read()
-                            file_data = io.BytesIO(file_data)
-                            ds = xr.open_dataset(file_data)
-                            df = ds.to_dataframe().reset_index()   
-                            s3.upload_fileobj(file_data, bucket_name, prefix+"/"+str(inputdate)+"/nc/"+member.name) 
-                            buffer = io.BytesIO()
-                            df.to_parquet(buffer, index=False, engine='pyarrow')
-                            buffer.seek(0)
-                            s3.put_object(Bucket=bucket_name,Key=prefix+"/"+str(inputdate)+"/parquet/"+member.name.replace(".nc",".parquet"),Body=buffer.getvalue())
-                            process_parquet_files(member.name,df)
+                MLFLOW_TRACKING_URI = config_setup['MLFLOW']['tracking_uri']
+                EXPERIMENT_NAME = config_setup['MLFLOW']['experiment_name']
+                mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+                os.environ["AWS_ACCESS_KEY_ID"] = config_setup['access_key']
+                os.environ["AWS_SECRET_ACCESS_KEY"] = config_setup['secret_key']
+                os.environ["MLFLOW_S3_ENDPOINT_URL"] = config_setup['minio_endpoint']
+                mlflow.set_experiment(EXPERIMENT_NAME)
+                with mlflow.start_run(run_name=str(inputdate)):
+                    archive_bytes = io.BytesIO(response.content)
+                    archive_bytes.seek(0)  # Reset stream
+                    html_files = []
+                    with tarfile.open(fileobj=archive_bytes, mode='r:gz') as tar:
+                        for member in tar.getmembers():
+                            try:
+                                if member.isfile():
+                                    extracted_file = tar.extractfile(member)
+                                    file_data = extracted_file.read()
+                                    file_data = io.BytesIO(file_data)
+                                    ds = xr.open_dataset(file_data)
+                                    df = ds.to_dataframe().reset_index()   
+                                    s3.upload_fileobj(file_data, bucket_name, prefix+"/"+str(inputdate)+"/nc/"+member.name) 
+                                    buffer = io.BytesIO()
+                                    df.to_parquet(buffer, index=False, engine='pyarrow')
+                                    buffer.seek(0)
+                                    s3.put_object(Bucket=bucket_name,Key=prefix+"/"+str(inputdate)+"/parquet/"+member.name.replace(".nc",".parquet"),Body=buffer.getvalue())
+                                    html_path = f"/tmp/"+member.name.replace(".nc",".html")
+                                    profile = ProfileReport(df, title="EDA Report", explorative=True)
+                                    profile.to_file(html_path)
+                                    html_files.append(html_path)
+                                    mlflow.log_artifact(html_path, "Raw data Visualization")
+                            except:
+                                continue        
+                    for html_file in html_files:
+                        if os.path.exists(html_file):
+                            os.remove(html_file)
             else:
                 print("downloaded")
 
