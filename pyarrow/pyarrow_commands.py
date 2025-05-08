@@ -40,3 +40,44 @@ for idx, i in enumerate(table.schema.names):
 combined = pa.concat_tables([table, table2]) # Concate two tables
 
 print(name_dict)
+
+# Concat columns from different parquet files
+df1 = pq.read_table("/home/gopi/doker_airflow/parquet_files/2m_relative_humidity_R1.parquet").to_pandas()
+df2 = pq.read_table("/home/gopi/doker_airflow/parquet_files/2m_temperature_R1.parquet")
+df3 = pq.read_table("/home/gopi/doker_airflow/parquet_files/surface_pressure_R1.parquet")
+df4 = pq.read_table("/home/gopi/doker_airflow/parquet_files/total_rainfall_R1.parquet")
+
+df2 = df2.select([3]).to_pandas()
+df3 = df3.select([3]).to_pandas()
+df4 = df4.select([3]).to_pandas()
+df_final = pd.concat([df1, df2, df3, df4], axis=1)
+print(len(df1), len(df2), len(df3), len(df4))
+print(df_final)
+
+import pyarrow.parquet as pq
+import pyarrow.compute as pc
+
+def day_wise_data(plant_lat, plant_lon):
+    table = pq.read_table("/home/gopi/doker_airflow/parquet_files/2m_relative_humidity_R1.parquet")
+    lat = table.column("lat")
+    lon = table.column("lon")
+
+    lat_lower = plant_lat - 0.5
+    lat_upper = plant_lat + 0.5
+    lon_lower = plant_lon - 0.25
+    lon_upper = plant_lon + 0.25
+
+    mask = (
+        pc.and_(
+            pc.and_(pc.greater(lat, lat_lower), pc.less(lat, lat_upper)),
+            pc.and_(pc.greater(lon, lon_lower), pc.less(lon, lon_upper))
+        )
+    )
+
+    filtered_table = table.filter(mask)
+    
+    filtered_df = filtered_table.to_pandas()
+    grouped_df = filtered_df.groupby("time", as_index=False)["rh2m"].mean()
+    print(grouped_df)
+
+day_wise_data(8.8905, 77.7862)

@@ -11,11 +11,7 @@
 --SELECT *
 --FROM customers
 --WHERE score>0
---ORDER BY score DESC, country 
-
-
-
-
+--ORDER BY score DESC, country  
 
 
 
