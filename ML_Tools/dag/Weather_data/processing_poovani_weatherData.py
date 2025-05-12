@@ -1,15 +1,17 @@
 import pyarrow.compute as pc
 import numpy as np
-import boto3,io,os
+import boto3,io,os,pyarrow,mlflow
 from config import config_setup
 import pandas as pd
 import pyarrow.parquet as pa
-import pyarrow, logging
-from datetime import datetime
-
-logger = logging.getLogger("airflow.task")
-
-bucket_name = config_setup['source_bucket']
+import pandas as pd
+import pyarrow.parquet as pa
+from config import config_setup
+from ydata_profiling import ProfileReport
+import pandas as pd
+import xarray as xr
+import requests, tarfile
+from requests.auth import HTTPBasicAuth
 
 s3 = boto3.client(
     's3',
@@ -17,6 +19,101 @@ s3 = boto3.client(
     aws_access_key_id=config_setup['access_key'],
     aws_secret_access_key=config_setup['secret_key']
 )
+
+def checking_date_minIO(bucket_name, prefix,inputdate):
+    response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
+    lst = [obj["Key"] for obj in response.get("Contents", [])]
+    for i in lst:
+        if str(inputdate) in i:
+            return "file_exists"
+    return "file_missing"
+
+def processing_files(bucket_name,prefix,inputdate,cycle):
+    url = config_setup["weather_data"]["url"]
+    api_key = config_setup["weather_data"]["api_key"]
+    username = config_setup["weather_data"]["username"]
+    password = config_setup["weather_data"]["password"]
+    files = [
+            {'url': url, 'variable': "GreenkoWindEnergy"},
+            {'url': url, 'variable': "wind_solar_ind"},  
+        ]
+    with requests.Session() as session:
+        session.auth = HTTPBasicAuth(username, password)     
+        for file in files:
+            try:
+                if 'wind_solar_ind' in file['variable']:
+                    continue
+                if 'GreenkoWindEnergy' in file['variable']:
+                    subdir_name = "GreenkoWindEnergy"
+            except Exception as e:
+                print(e)
+            headers = {
+                'inputdate': inputdate,
+                'cycle': cycle,
+                'datavariable': subdir_name,
+                'api-key': api_key,
+            }
+            try: 
+                response = session.post(file['url'], headers=headers, stream=True)
+            except Exception as e:
+                continue
+
+            if response.status_code == 200:
+                prev_file_name = None
+                uploaded_table = None
+                MLFLOW_TRACKING_URI = config_setup['MLFLOW']['tracking_uri']
+                EXPERIMENT_NAME = config_setup['MLFLOW']['experiment_name']
+                mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+                os.environ["AWS_ACCESS_KEY_ID"] = config_setup['access_key']
+                os.environ["AWS_SECRET_ACCESS_KEY"] = config_setup['secret_key']
+                os.environ["MLFLOW_S3_ENDPOINT_URL"] = config_setup['minio_endpoint']
+                mlflow.set_experiment(EXPERIMENT_NAME)
+                with mlflow.start_run(run_name=str(inputdate)):
+                    archive_bytes = io.BytesIO(response.content)
+                    archive_bytes.seek(0)  # Reset stream
+                    html_files = []
+                    with tarfile.open(fileobj=archive_bytes, mode='r:gz') as tar:
+                        for member in tar.getmembers():
+                            try:
+                                if member.isfile():
+                                    file_name = ("_").join(member.name.split("_")[:-1])
+                                    extracted_file = tar.extractfile(member)
+                                    file_data = extracted_file.read()
+                                    file_data = io.BytesIO(file_data)
+                                    ds = xr.open_dataset(file_data)
+                                    df = ds.to_dataframe().reset_index() 
+                                    s3.upload_fileobj(file_data, bucket_name, prefix+"/"+str(inputdate)+"/nc/"+member.name) 
+
+                                    table = pyarrow.Table.from_pandas(df)
+                                    if (prev_file_name == None) or (prev_file_name!=file_name):
+                                        uploaded_table = table
+                                        buffer = io.BytesIO()
+                                        pa.write_table(uploaded_table, buffer)  
+                                        buffer.seek(0)
+                                        s3.put_object(Bucket=bucket_name,Key= prefix+"/"+str(inputdate)+"/parquet/"+file_name+".parquet",Body=buffer.getvalue())
+                                        print("file uploaded with none",file_name+".parquet",len(uploaded_table))
+                                        prev_file_name = file_name
+                                    else:
+                                        if prev_file_name == file_name:
+                                            uploaded_table = pyarrow.concat_tables([uploaded_table, table]) 
+                                            buffer = io.BytesIO()
+                                            pa.write_table(uploaded_table, buffer)  
+                                            buffer.seek(0)
+                                            s3.put_object(Bucket=bucket_name,Key= prefix+"/"+str(inputdate)+"/parquet/"+file_name+".parquet",Body=buffer.getvalue()) 
+                                            print("file uploaded after concatenation",file_name+".parquet",len(uploaded_table))
+
+                                    # html_path = f"/tmp/"+member.name.replace(".nc",".html")
+                                    # profile = ProfileReport(df, title="EDA Report", explorative=True)
+                                    # profile.to_file(html_path)
+                                    # html_files.append(html_path)
+                                    # mlflow.log_artifact(html_path, "Raw data Visualization")        
+                            except:
+                                continue        
+                    for html_file in html_files:
+                        if os.path.exists(html_file):
+                            os.remove(html_file)
+            else:
+                print("downloaded")
 
 def interpolate_values(table, height, lat, lon):
     groups = table.column("time").to_pylist()
@@ -51,11 +148,11 @@ def interpolate_values(table, height, lat, lon):
     result_table = pyarrow.table(columns)
     return result_table
 
-def plant_wise_data_process(date):
-    response = s3.list_objects_v2(Bucket=bucket_name, Prefix="weather_data/processed/"+str(date)+"/parquet")
+def plant_wise_data_process(bucket_name,prefix):
+    response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix+"/parquet")
     lst = [obj["Key"] for obj in response.get("Contents", [])]   
     dictnry = {} 
-    parameter_name_new = {"time":"time","lat":"latitude","lon":"longitude","rf":"Rain_Fall","dswrf":"Solar_Radiation","rh2m":"Relative_Humidity","press":"Pressure","t2m":"Temperature",
+    parameter_rename = {"time":"time","lat":"latitude","lon":"longitude","rf":"Rain_Fall","dswrf":"Solar_Radiation","rh2m":"Relative_Humidity","press":"Pressure","t2m":"Temperature",
                           "u":"u_velocity","v":"v_velocity"}
     print("Getting parquet files data from MinIO")
     for i in lst:
@@ -99,9 +196,11 @@ def plant_wise_data_process(date):
                 combined_table = combined_table.append_column(new_column_name, new_column)
         if combined_table:
             old_names = combined_table.schema.names        
-            new_names = [parameter_name_new.get(name, name) for name in old_names] 
+            new_names = [parameter_rename.get(name, name) for name in old_names] 
             combined_table = combined_table.rename_columns(new_names)    
+            new_temp_col = pc.subtract(combined_table["Temperature"], pyarrow.scalar(273))
+            combined_table = combined_table.set_column(combined_table.schema.get_field_index("Temperature"), "Temperature", new_temp_col)
             buffer = io.BytesIO()
             pa.write_table(combined_table, buffer)
             buffer.seek(0)
-            s3.put_object(Bucket=bucket_name,Key="weather_data/processed/"+str(date)+"/Plant_wise_data/"+plant_name+"_"+str(plant_lat)+"_"+str(plant_lon)+".parquet",Body=buffer.getvalue())        
+            s3.put_object(Bucket=bucket_name,Key=prefix+"/Plant_wise_data/"+plant_name+"_"+str(plant_lat)+"_"+str(plant_lon)+".parquet",Body=buffer.getvalue())        
