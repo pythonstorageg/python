@@ -1,7 +1,7 @@
--- USE MyDatabase
+USE MyDatabase
 
--- SELECT * 
--- FROM customers
+select * 
+FROM customers
 
 --SELECT
 --    country,
@@ -12,6 +12,7 @@
 --FROM customers
 --WHERE score>0
 --ORDER BY score DESC, country  
+
 
 
 
