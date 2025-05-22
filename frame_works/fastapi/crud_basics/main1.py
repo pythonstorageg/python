@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
 
 app = FastAPI()
@@ -45,13 +45,15 @@ def getting_statement():
 @app.get("/{id}")
 def getting_statement(id=int):
     data = getting_id_data(int(id))
+    if not data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f'{id} not available')
     return data
 
-@app.post("/")
+@app.post("/",status_code=status.HTTP_201_CREATED)
 def adding_data(dataReceived:Input_data):
     data = dataReceived.dict()
     database.append(data)
-    return {"Data added successfully",database}
+    return {"msg":"Data added successfully","data":database}
 
 @app.patch("/{id}")
 def updating_data(dataReceived:Modifying_data,id=int):

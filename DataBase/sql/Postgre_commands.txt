@@ -1,0 +1,11 @@
+
+#### Deleting last rows
+
+-- DELETE FROM ap01_psp 
+-- WHERE "Timestamp" IN (
+--     SELECT "Timestamp" FROM ap01_psp 
+--     ORDER BY "Timestamp" DESC
+--     LIMIT 3
+-- );
+
+#### 

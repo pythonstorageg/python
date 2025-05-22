@@ -1,17 +1,11 @@
-import pyarrow.compute as pc
 import numpy as np
-import boto3,io,os,pyarrow,mlflow
+import boto3,io,requests, tarfile, time
 from config import config_setup
-import pandas as pd
 import pandas as pd
 import pyarrow.parquet as pq
 import pyarrow as pa
-from config import config_setup
-import pandas as pd
 import xarray as xr
-import requests, tarfile, time, glob
 from requests.auth import HTTPBasicAuth
-from natsort import natsorted 
 
 s3 = boto3.client(
     's3',
@@ -85,7 +79,7 @@ def processing_files(prefix,inputdate,cycle):
                                 .strftime('%Y-%m-%d %H:%M:%S')
                                 )
 
-                                s3.put_object(Bucket=bucket_name, Key=prefix+"/"+str(inputdate)+"/nc/"+member.name, Body=data_bytes)
+                                s3.put_object(Bucket=bucket_name, Key=prefix+"/"+str(inputdate)+"/"+str(cycle)+"_utc"+"/nc/"+member.name, Body=data_bytes)
 
                                 df = ds.to_dataframe().reset_index()
                         
@@ -150,22 +144,39 @@ def processing_files(prefix,inputdate,cycle):
                         'rf':'Rainfall(kg/m^2)',
                         'rh2m':'SpecificHumidity(kg/kg)'
                         }, inplace=True)
-                        plant_data.to_csv("/home/gopi/doker_airflow/15may2025/scripts/saved_files/1.csv")
+                        dates_list = sorted(set(pd.to_datetime(plant_data['time'], errors='coerce').dt.date.to_list()))
+                        for date in dates_list:
+                            df_date = plant_data[pd.to_datetime(plant_data['time'], errors='coerce').dt.date==date]
+                            table = pa.Table.from_pandas(df_date)
+                            buffer = io.BytesIO()
+                            pq.write_table(table, buffer)
+                            buffer.seek(0)
+                            s3.put_object(Bucket=bucket_name,Key=prefix+"/"+str(inputdate)+"/"+str(cycle)+"_utc"+"/Day_wise_data/"+plant_name+"/"+str(date)+".parquet",Body=buffer.getvalue())
                         table = pa.Table.from_pandas(plant_data)
                         buffer = io.BytesIO()
                         pq.write_table(table, buffer)
                         buffer.seek(0)
-                        s3.put_object(Bucket=bucket_name,Key=prefix+"/"+str(inputdate)+"/Plant_wise_data/"+plant_name+".parquet",Body=buffer.getvalue())
-                        break
+                        s3.put_object(Bucket=bucket_name,Key=prefix+"/"+str(inputdate)+"/"+str(cycle)+"_utc"+"/Plant_wise_data/"+plant_name+".parquet",Body=buffer.getvalue())
                     for file_name in data_dict.keys():
                         table = pa.Table.from_pandas(data_dict[file_name])
                         buffer = io.BytesIO()
                         pq.write_table(table, buffer)
                         buffer.seek(0)
-                        s3.put_object(Bucket=bucket_name,Key=prefix+"/"+str(inputdate)+"/parquet/"+file_name+".parquet",Body=buffer.getvalue())
-                        # break
+                        s3.put_object(Bucket=bucket_name,Key=prefix+"/"+str(inputdate)+"/"+str(cycle)+"_utc"+"/parquet/"+file_name+".parquet",Body=buffer.getvalue())
 
 
 t1 = time.time()
-processing_files("weather_data/processed","20250521","00")
+processing_files("weather_data/processed","20250521","12")
 print(time.time()-t1)
+
+def checking_date_minIO(bucket_name, prefix,inputdate):
+    response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
+    lst = [obj["Key"] for obj in response.get("Contents", [])]
+    for i in lst:
+        if str(inputdate) in i:
+            return "file_exists"
+    return "file_missing"
+
+
+
+
