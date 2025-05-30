@@ -1,20 +1,40 @@
 import numpy as np
 import boto3,io,requests, tarfile, time
-from config import config_setup
+from weather_data_credentials import config_setup
 import pandas as pd
 import pyarrow.parquet as pq
 import pyarrow as pa
 import xarray as xr
 from requests.auth import HTTPBasicAuth
+import smtplib, os
+from email.mime.text import MIMEText
+from datetime import datetime
 
 s3 = boto3.client(
     's3',
-    endpoint_url=config_setup['minio_endpoint'],
-    aws_access_key_id=config_setup['access_key'],
-    aws_secret_access_key=config_setup['secret_key']
+    endpoint_url=config_setup['minIO']['endpoint'],
+    aws_access_key_id=config_setup['minIO']['access_key'],
+    aws_secret_access_key=config_setup['minIO']['secret_key']
 )
 
-bucket_name = config_setup['source_bucket']
+bucket_name = config_setup['minIO']['source_bucket']
+
+def send_mail(message):
+    server = smtplib.SMTP('smtp.office365.com', 587)
+    server.starttls()
+    server.login(config_setup['mail_cred']['userName'], config_setup['mail_cred']['appPasword'])
+    message = f"<b> {message} </b>"
+    msg = MIMEText(message,'html')
+    msg['Subject'] = "Retrieving weather data"
+    msg['From'] = config_setup['mail_cred']['userName']
+    msg['To'] = ", ".join(config_setup['mail_cred']['to_recipients'])
+    msg['Cc'] = ", ".join(config_setup['mail_cred']['cc_recipients']) 
+    server.sendmail(config_setup['mail_cred']['userName'],config_setup['mail_cred']['to_recipients']+config_setup['mail_cred']['cc_recipients'],msg.as_string())
+
+def checking_date_minIO(prefix):
+    if s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix).get("Contents"):
+        return "file_exists"
+    return "file_missing"
 
 def compute_specific_humidity(temp_c,pressure_pa,rh_percent):
     pressure_hpa = pressure_pa / 100.0
@@ -24,6 +44,9 @@ def compute_specific_humidity(temp_c,pressure_pa,rh_percent):
     return round(q,2)
 
 def processing_files(prefix,inputdate,cycle):
+    print("input date",inputdate)
+    dag_folder = os.path.dirname(os.path.abspath(__file__))
+    csv_path = os.path.join(dag_folder, "Greenkowindplantdetails_OLD.csv")
     url = config_setup["weather_data"]["url"]
     api_key = config_setup["weather_data"]["api_key"]
     username = config_setup["weather_data"]["username"]
@@ -90,7 +113,7 @@ def processing_files(prefix,inputdate,cycle):
                                     data_dict[file_name] = df      
                         except:
                             continue    
-                    df_plant = pd.read_csv("Greenkowindplantdetails_OLD.csv")  
+                    df_plant = pd.read_csv(csv_path)  
                     levels = [50,80,100,120,150]
                     for idx, plant_name in enumerate(df_plant["Farm"]):
                         plant_lat = df_plant["latitude"][idx]
@@ -99,7 +122,6 @@ def processing_files(prefix,inputdate,cycle):
                         print("Processing",idx,plant_name,plant_lat,plant_lon,plant_height)
                         plant_data = None
                         for file_name in data_dict.keys():
-                            print(file_name)
                             dist = np.sqrt((data_dict[file_name]['lat'] - plant_lat)**2 + (data_dict[file_name]['lon'] - plant_lon)**2)
                             nearest_idx = dist.idxmin()
                             nearest_lat = data_dict[file_name].loc[nearest_idx, 'lat']
@@ -163,20 +185,9 @@ def processing_files(prefix,inputdate,cycle):
                         pq.write_table(table, buffer)
                         buffer.seek(0)
                         s3.put_object(Bucket=bucket_name,Key=prefix+"/"+str(inputdate)+"/"+str(cycle)+"_utc"+"/parquet/"+file_name+".parquet",Body=buffer.getvalue())
-
-
-t1 = time.time()
-processing_files("weather_data/processed","20250521","12")
-print(time.time()-t1)
-
-def checking_date_minIO(bucket_name, prefix,inputdate):
-    response = s3.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
-    lst = [obj["Key"] for obj in response.get("Contents", [])]
-    for i in lst:
-        if str(inputdate) in i:
-            return "file_exists"
-    return "file_missing"
-
-
-
+                send_mail("Successfully retrieved the data from Weather API for the execution date: " + str(datetime.strptime(str(inputdate), "%Y%m%d").strftime("%Y-%m-%d")) + " " +str(cycle)+"_UTC.")
+                return True        
+            else:
+                send_mail("Weather API is not responding for the execution date: " + str(datetime.strptime(str(inputdate), "%Y%m%d").strftime("%Y-%m-%d")) + " "+str(cycle)+"_UTC.")
+                return False
 

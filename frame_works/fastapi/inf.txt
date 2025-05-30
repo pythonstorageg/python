@@ -1,2 +1,0 @@
-# local env
-/home/gopi/environments/fast_api
