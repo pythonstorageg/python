@@ -1,0 +1,15 @@
+Steps from G4caster
+-------------------
+Downloading Temperature (Min,Max) and Rainfall IMD data
+
+
+
+Steps from GMAT
+---------------
+Going through the data 
+
+
+
+GMAT files structure
+--------------------
+GMATS-Dev -- Forecast -- forcast targets (Market_ID) - Forecast HIST (ID) -- Forecast time series (96 blocks) 
