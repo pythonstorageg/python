@@ -1,7 +1,6 @@
 from airflow import DAG
 from airflow.sensors.python import PythonSensor
 from datetime import datetime
-from GEMATS_functions import open_meteo_forecast 
 import numpy as np
 from weather_data_credentials import config_setup
 import requests,pytz,os
