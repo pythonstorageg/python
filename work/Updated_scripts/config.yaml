@@ -1,0 +1,9 @@
+open_meteo:
+  forecast_url: "https://api.open-meteo.com/v1/forecast"
+  hourly_parameters_lst: ['temperature_2m','shortwave_radiation','rain','cloudcover','windspeed_10m','surface_pressure',"relative_humidity_2m","winddirection_10m"]
+  renamed_parameters_lst: ['temperature','radiation','rain_fall','cloud_cover','velocity','pressure',"relative_humidity","wind_direction"]
+
+gemats_db:
+  iex_definitions_key_lst: ["MARKET AREA DEFINITION"]
+  definition_geo_location_key_lst: ["RLDC","MARKET_AREA","COUNTRY"]
+
