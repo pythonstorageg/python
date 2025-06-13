@@ -9,7 +9,7 @@ import pyarrow.parquet as pq
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)),".env"))
 
 s3 = boto3.client(
     's3',
@@ -23,9 +23,10 @@ db_host = os.getenv("DB_HOST")
 db_port = int(os.getenv("DB_PORT"))  
 db_user = os.getenv("DB_USER")
 db_password = os.getenv("DB_PASSWORD")
+client = MongoClient(f"mongodb://{db_user}:{db_password}@{db_host}:{db_port}/?authMechanism=SCRAM-SHA-256&authSource=geeml")
 # client = MongoClient(f"mongodb://{db_user}:{db_password}@{db_host}:{db_port}/?authSource=admin&authMechanism=SCRAM-SHA-256")
-client = MongoClient(f"mongodb://{db_host}:{db_port}")
-db_iex = client[os.getenv("DB_NAME_IX")]
+# client = MongoClient(f"mongodb://{db_host}:{db_port}")
+db_iex = client[os.getenv("DB_NAME_DEF")]
 db_def = client[os.getenv("DB_NAME_DEF")]
 collection_geo_locations = db_def['GEO_LOCATION']
 collection_meteo_forecast = db_iex['open_meteo_forecast'] 
@@ -44,12 +45,12 @@ def compute_specific_humidity(temp_c,pressure_pa,rh):
     return round(q,2)
 
 def api_interaction_status(start_time,status,msg):
-    end_time = dt.strptime(str(dt.now()), "%Y-%m-%d %H:%M:%S.%f") 
+    end_time = dt.now(ist).replace(tzinfo=None)
     collection_meteo_api_interaction.insert_one({"year":start_time.year,"month":start_time.month,"day":start_time.day,
                                                                      "week_day":start_time.weekday(),"start_time":ist.localize(start_time),"end_time":ist.localize(end_time),"status":status,
                                                                      "message":msg})
 def open_meteo_forecast():
-    start_time = dt.strptime(str(dt.now()), "%Y-%m-%d %H:%M:%S.%f") 
+    start_time = dt.now(ist).replace(tzinfo=None)
     mkt_geo_locations = []
     try:
         geo_location_data = collection_geo_locations.find({"TYPE":{"$in":config['gemats_db']['definition_geo_location_key_lst']}},{"CODE":1,"LATITUDE":1,"LONGITUDE":1}).to_list()
@@ -98,6 +99,7 @@ def open_meteo_forecast():
                 pq.write_table(table, buffer)
                 buffer.seek(0)
                 s3.put_object(Bucket=bucket_name,Key="GEMATS/open_meteo_forecast/"+str(start_time.strftime("%Y-%m-%d/%H:%M"))+"/"+str(code)+".parquet",Body=buffer.getvalue())    
+                print("uploaded to MinIO")
             except Exception as e:
                 api_interaction_status(start_time,False,"unable to update the weather data:"+str(e))
                 return False
