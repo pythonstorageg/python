@@ -1,12 +1,25 @@
 import pandas as pd
 import numpy as np
-import pytz,os,requests
+import pytz,os,requests,smtplib
+from email.mime.text import MIMEText
 from datetime import datetime,timedelta
 from weather_data_credentials import config_setup
 import xarray as xr
 
 ist1 = pytz.timezone("Asia/Kolkata")
 df_marketarea = pd.read_csv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "GEMATS_Market_locations.csv"))
+
+def send_mail(message):
+    server = smtplib.SMTP('smtp.office365.com', 587)
+    server.starttls()
+    server.login(config_setup['mail_cred']['userName'], config_setup['mail_cred']['appPasword'])
+    message = f"<b> {message} </b>"
+    msg = MIMEText(message,'html')
+    msg['Subject'] = "Retrieving weather data"
+    msg['From'] = config_setup['mail_cred']['userName']
+    msg['To'] = ", ".join(config_setup['mail_cred']['to_recipients'])
+    msg['Cc'] = ", ".join(config_setup['mail_cred']['cc_recipients']) 
+    server.sendmail(config_setup['mail_cred']['userName'],config_setup['mail_cred']['to_recipients']+config_setup['mail_cred']['cc_recipients'],msg.as_string())
 
 def compute_specific_humidity(temp_c,pressure_pa,rh):
     pressure_hpa = pressure_pa / 100.0
@@ -94,7 +107,7 @@ def open_meteo_forecast():
             day = dt.day
             weekday = dt.weekday()
             start_time = ist1.localize(dt)
-            rain_fall = df['rain'][idx]
+            rain_fall = df['rain'][idx1]
             temp = df['temperature_2m'][idx1]
             radiation = df['shortwave_radiation'][idx1]
             humidity = df['SpecificHumidity'][idx1]
@@ -102,10 +115,10 @@ def open_meteo_forecast():
             press = df['surface_pressure'][idx1],
             cloud_cover = df['cloudcover'][idx1],
             db_jj = {"area":id,"start_time":start_time,
-                            "temperature":float(temp),"radiation":float(radiation),"specific_humidity":float(humidity),"pressure":float(press),"rain_fall":float(rain_fall),
-                            "day":day,"year":year,"month":month,"weekday":weekday,"velocity":float(velocity),"cloudcover":cloud_cover}
+                            "temperature":float(temp),"radiation":float(radiation),"specific_humidity":float(humidity),"pressure":float(press[0]),"rain_fall":float(rain_fall),
+                            "day":day,"year":year,"month":month,"weekday":weekday,"velocity":float(velocity),"cloud_cover":float(cloud_cover[0])}
             print(db_jj)
-            # config_setup['gemats_db']['open_meteo_forecast'].update_one({"start_time":start_time,"area":id},{"$set": db_jj},upsert=True)
+        #     config_setup['gemats_db']['open_meteo_forecast'].update_one({"start_time":start_time,"area":id},{"$set": db_jj},upsert=True)
 
 def IMD_historical(max_temp_path,min_temp_path,rainfall_path,year):
     if year%4 == 0:
@@ -149,7 +162,7 @@ def IMD_historical(max_temp_path,min_temp_path,rainfall_path,year):
             # config_setup['gemats_db']['IMD_market_wise'].insert_one(db_jj)
 
 
-open_meteo_forecast()
+# open_meteo_forecast()
 # open_meteo_historical()
 # IMD_historical("/home/gopi/doker_airflow/IMD/2024/Maxtemp_MaxT_2024.GRD",
 #                  "/home/gopi/doker_airflow/IMD/2024/Mintemp_MinT_2024.GRD",

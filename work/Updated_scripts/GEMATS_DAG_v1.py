@@ -1,5 +1,5 @@
-# from airflow import DAG
-# from airflow.sensors.python import PythonSensor
+from airflow import DAG
+from airflow.sensors.python import PythonSensor
 from datetime import datetime as dt
 import numpy as np
 import requests,pytz,os,yaml,boto3,io
@@ -23,10 +23,8 @@ db_host = os.getenv("DB_HOST")
 db_port = int(os.getenv("DB_PORT"))  
 db_user = os.getenv("DB_USER")
 db_password = os.getenv("DB_PASSWORD")
-client = MongoClient(f"mongodb://{db_user}:{db_password}@{db_host}:{db_port}/?authMechanism=SCRAM-SHA-256&authSource=geeml")
-# client = MongoClient(f"mongodb://{db_user}:{db_password}@{db_host}:{db_port}/?authSource=admin&authMechanism=SCRAM-SHA-256")
-# client = MongoClient(f"mongodb://{db_host}:{db_port}")
-db_iex = client[os.getenv("DB_NAME_DEF")]
+client = MongoClient(f"mongodb://{db_user}:{db_password}@{db_host}:{db_port}/?authSource=admin&authMechanism=SCRAM-SHA-256")
+db_iex = client[os.getenv("DB_NAME_IEX")]
 db_def = client[os.getenv("DB_NAME_DEF")]
 collection_geo_locations = db_def['GEO_LOCATION']
 collection_meteo_forecast = db_iex['open_meteo_forecast'] 
@@ -86,12 +84,12 @@ def open_meteo_forecast():
                 df['day'] = df['time'].dt.day
                 df['week_day'] = df['time'].dt.weekday
                 df['start_time'] = df['time'].dt.tz_localize(ist).dt.tz_convert('UTC')
+                df['prev_time'] = df['start_time'] - pd.Timedelta(hours=1)
                 df['area'] = str(id)
-                df = df.rename(columns=dict(zip(config['open_meteo']['hourly_parameters_lst'],config['open_meteo']['renamed_parameters_lst'])))
-                df[config['open_meteo']['renamed_parameters_lst']] = df[config['open_meteo']['renamed_parameters_lst']].astype(float)
-                df['pressure'] = 100 * df['pressure']
-                df['specific_humidity'] = compute_specific_humidity(df['temperature'], df['pressure'], df['relative_humidity']).astype(float)
                 df.drop(columns=['time'],inplace=True)
+                df['pressure_msl'] = 100 * df['pressure_msl']
+                df['surface_pressure'] = 100 * df['surface_pressure']
+                df[config['open_meteo']['hourly_parameters_lst']] = df[config['open_meteo']['hourly_parameters_lst']].astype(float)   
                 for record in df.to_dict("records"):
                     collection_meteo_forecast.update_one({"start_time": record["start_time"],"area": record["area"]},{"$set": record},upsert=True)  
                 table = pa.Table.from_pandas(df)
@@ -107,18 +105,18 @@ def open_meteo_forecast():
             api_interaction_status(start_time,False,"open-meteo api is not responding")
             return False
     api_interaction_status(start_time,True,"Successfully updated the weather data")
-    return True   
-open_meteo_forecast()
-# with DAG('open-meteo-forecast',start_date=dt(2025, 5, 1, 0, 0),
-#     schedule_interval='0 4,10,16,22 * * *', catchup=False) as dag:
-#     task = PythonSensor(
-#         task_id="open-meteo-forecast",
-#         python_callable=open_meteo_forecast,
-#         poke_interval=3600,  # 1 hr
-#         timeout=10800,     # 3 hrs  
-#         mode="poke",       
-#         soft_fail=False
-#     )
+    return True  
+ 
+with DAG('open-meteo-forecast',start_date=dt(2025, 5, 1, 0, 0),
+    schedule_interval='0 4,10,16,22 * * *', catchup=False) as dag:
+    task = PythonSensor(
+        task_id="open-meteo-forecast",
+        python_callable=open_meteo_forecast,
+        poke_interval=3600,  # 1 hr
+        timeout=10800,     # 3 hrs  
+        mode="poke",       
+        soft_fail=False
+    )
 
 
 
