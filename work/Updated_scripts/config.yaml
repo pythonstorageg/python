@@ -1,0 +1,10 @@
+open_meteo:
+  forecast_url: "https://api.open-meteo.com/v1/forecast"
+  hourly_parameters_lst: ["temperature_2m","relative_humidity_2m","pressure_msl","surface_pressure","cloud_cover","wind_speed_10m","wind_speed_80m","wind_speed_120m",
+    "wind_speed_180m","wind_direction_10m","wind_direction_80m","wind_direction_120m","wind_direction_180m","shortwave_radiation","direct_radiation","direct_normal_irradiance",
+    "diffuse_radiation","precipitation","rain"]
+
+gemats_db:
+  iex_definitions_key_lst: ["MARKET AREA DEFINITION"]
+  definition_geo_location_key_lst: ["RLDC","MARKET_AREA","COUNTRY"]
+

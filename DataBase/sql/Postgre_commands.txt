@@ -1,0 +1,15 @@
+
+#### Deleting last rows
+
+-- DELETE FROM ap01_psp 
+-- WHERE "Timestamp" IN (
+--     SELECT "Timestamp" FROM ap01_psp 
+--     ORDER BY "Timestamp" DESC
+--     LIMIT 3
+-- );
+
+#### 
+-- SELECT * FROM ap01_psp ORDER BY "Timestamp" limit 10
+-- SELECT count(*) FROM ap01_psp 
+-- SELECT count(*) FROM ap01_psp GROUP BY "Timestamp" HAVING COUNT(*) > 1;
+SELECT file_name,count(*) FROM processed_files2 GROUP BY "file_name" HAVING COUNT(*) > 1

@@ -1,0 +1,15 @@
+command_terminal
+----------------
+ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
+ssh-add ~/.ssh/id_rsa
+cat ~/.ssh/id_rsa.pub
+
+github
+------
+settings/ssh and GPG keys/New ssh key/Title and key (copied from terminal)/Add key
+
+
+
+git add .
+git commit -m "commit message"
+git push --set-upstream git@github.com:pythonstorageg/python.git <branch name>

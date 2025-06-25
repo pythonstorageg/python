@@ -1,0 +1,18 @@
+in vscode
+---------
+
+Open the Command Palette (Ctrl+Shift+P)
+
+Search: MS SQL: Connect
+
+Enter:
+
+    Server name: localhost or your IP
+
+    Authentication type: SQL Login
+
+    Username: SA
+
+    Password: Om@967665
+
+Choose a database (or press Enter to use the default)

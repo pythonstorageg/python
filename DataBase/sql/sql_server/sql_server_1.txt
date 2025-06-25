@@ -1,0 +1,63 @@
+# For creating the database copy the "init-sqlserver-mydatabase.sql" and execute
+
+USE DaABASE_NAME # FOR CHOOSING THE DATABASE
+SELECT * # 
+FROM TABLE_NAME # FROM WHICH TABLE DATA SHOULD QUERY, HERE FIRST 'FROM' WILL EXECUTE AFTER THAT 'SELECT' WILL
+
+--                # FOR SINGLE LINE COMMENT
+/* LINES */       # FOR COMMENT MULTIPLE LINES 
+
+SQL Query language - For getting the data from DB, this query doesn't modify the data inside DB
+We have different clauses in query language
+SELECT - For Selecting Columns (* means selecting all columns), if we select the required columns the columns order will be our selection order and not DB Table order
+    SELECT * (or) SELECT col1,col2 ...
+From - FROM WHICH TABLE DATA SHOULD QUERY
+    FROM Table_name
+Where - Filtering the data based on our condition
+    WHERE condition (<, >, !=, =, )
+Orderby - Sorting the data (Ascending or Descending, Default is the Ascending)
+    ORDERBY col_name ASC or DESC, nested sorting also can possible by selecting multiple columns (First selecting column executes first)
+Groupby - For Aggregating the data, if we use Groupby the select column should have column corresponding to Groupby and Aggregation
+    GROUPBY 
+Having - For filtering the data after Aggregation
+Distinct - To remove the duplicates from selected column
+Top - For limiting the no.of rows
+coding order and execution order of the clauses are different
+SELECT, Distinct, Top, Where, Having are the data filtering clauses based on requirement
+
+In Data Definition language, we are not retrieving the data. So after execution will get sucessful message instead of return data
+DDL commnds are useful for mainain the structure of the database
+CREATE - For creating the new Table
+ADD or DROP Column (Altering) - While adding the Column will add at the end and not possible to alter the columns order once created, 
+                                While creating and adding we should mention the data type
+DROP - drop the table completely
+
+In Data Manipulation language will Manipulate the data inside the existing table (empty or having data)
+INSERTING - Inserting the data may be either adding data manually or querying the data from source table
+            While Inserting manually if we not mention column names means values should be for all columns
+            if we not select the all columns, SQL will consider NUll for unselected columns
+UPDATE - Update the data in existing row data
+         SET - For assigning values to columns
+         WHERE - For selecting the row, other it will select all rows
+DELETE - To delete the existing rows in a table
+         FROM - To select the table
+         Where - Slecting the row to delete
+
+Where Operators are five types
+Comparision Operators - Comparing the two columns (or) expression with value (or) function with value ...
+                        (=, !=, >, <, >=, <=)
+Logical Operators - AND (all conditions true), OR (at least one true), NOT (Excludes matching values)
+Range Operators - BETWEEN (Check the value is within the Range or not like lower and upper boundary)
+Membeship Operators - IN (Checks value in list), NOT IN (Opposite to IN)
+Searhc Operators - LIKE (Searching for pattern in given text,'%':Anything (0,1 or many), '_':Exactly one)
+
+Joins - For adding the columns (Should need key (common) column for joining)
+Set Operators - For adding rows (Should need same no.of columns)
+
+
+
+
+
+
+
+

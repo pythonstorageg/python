@@ -1,0 +1,10 @@
+docker exec -it timescaledb psql -U user -d user   # user can get from docker inspetct container_name
+
+CREATE ROLE readonly_user WITH LOGIN PASSWORD 'readonly_pass';
+
+CREATE DATABASE data_ware_house;
+
+
+ # Grant permission to create the table by greenko (user)
+GRANT USAGE ON SCHEMA public TO greenko; 
+GRANT CREATE ON SCHEMA public TO greenko;
